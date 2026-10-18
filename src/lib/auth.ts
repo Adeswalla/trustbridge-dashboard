@@ -9,7 +9,6 @@ import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { recordTokenAudit } from "@/lib/token-audit";
 import { recordAuditLog } from "@/lib/audit";
 import { generateCsrfToken } from "@/lib/csrf";
-import type { AppRole } from "@/types";
 
 async function isOrgMember(accessToken: string, org: string): Promise<boolean> {
   try {
@@ -151,15 +150,8 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, account, profile }) {
       if (account?.provider === "github" && profile) {
-        const githubProfile = profile as {
-          id?: string | number;
-          login?: string;
-          name?: string | null;
-          email?: string | null;
-          image?: string | null;
-        };
-        const githubId = githubProfile.id?.toString();
-        const githubUsername = githubProfile.login;
+        const githubId = profile.id?.toString();
+        const githubUsername = profile.login;
 
         if (githubId && githubUsername) {
           let encryptedAccessToken: string | null = null;
@@ -176,16 +168,16 @@ export const authOptions: NextAuthOptions = {
             create: {
               githubId,
               githubUsername,
-              name: githubProfile.name ?? null,
-              email: githubProfile.email ?? null,
-              image: githubProfile.image ?? null,
+              name: profile.name ?? null,
+              email: profile.email ?? null,
+              image: profile.image ?? null,
               accessToken: encryptedAccessToken,
             },
             update: {
               githubUsername,
-              name: githubProfile.name ?? null,
-              email: githubProfile.email ?? null,
-              image: githubProfile.image ?? null,
+              name: profile.name ?? null,
+              email: profile.email ?? null,
+              image: profile.image ?? null,
               accessToken: encryptedAccessToken,
             },
           });
@@ -267,7 +259,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.sub ?? "";
         session.user.githubUsername = token.githubUsername;
         session.user.isMaintainer = token.isMaintainer ?? false;
-        session.user.role = token.role as AppRole | undefined;
+        session.user.role = token.role;
         session.user.maintainerOrgId = token.maintainerOrgId ?? "default";
         session.user.availableOrgs = token.availableOrgs ?? [];
         if (session.user.id) {
@@ -283,10 +275,13 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
 };
 
-export async function getSessionUserId(session: {
-  user?: { id?: string };
-}): Promise<string | null> {
-  return session.user?.id ?? null;
+export async function getSessionUserId(
+  session:
+    | { user?: { id?: string | null } | null }
+    | null
+    | undefined
+): Promise<string | null> {
+  return session?.user?.id ?? null;
 }
 
 export async function getDecryptedGithubAccessToken(

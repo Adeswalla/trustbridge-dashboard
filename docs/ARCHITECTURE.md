@@ -142,9 +142,17 @@ introspection.
 
 Requests are JSON POST bodies with a `query` string and optional `variables`.
 The endpoint rejects bodies over 16 KiB, queries deeper than 5 fields, queries
-with more than 100 selected fields, and queries with a weighted cost over 2,500
-(each selected contributor field costs one unit per requested row). These
-limits are checked before resolver execution.
+with more than 100 selected fields, and queries with a weighted cost over
+2,500. The analyzer charges each selected field at the current multiplier; a
+`contributors(first: N)` selection multiplies every field in its selection set
+by `N` (25 when `first` is omitted). For example, the query
+`contributors(first: 10) { nodes { githubUsername readiness } hasMore }`
+costs 41: one for `contributors`,
+10 each for `nodes`, `hasMore`, `githubUsername`, and `readiness`. Aliased
+selections are charged separately. The `first` value must be an integer from 1
+through 100, and a query that exceeds any bound returns HTTP 400 before
+resolvers run. A page-size variable with the wrong GraphQL type is rejected
+before cost calculation rather than being coerced into an unintended limit.
 Requests are also limited to 120 per minute per client IP, matching the public
 stats REST endpoint.
 
