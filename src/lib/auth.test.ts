@@ -120,16 +120,21 @@ describe("auth jwt callback - maintainer team scoping", () => {
 
   it("falls back to the org-only check when GITHUB_MAINTAINER_TEAM is unset (no regression)", async () => {
     process.env.GITHUB_MAINTAINER_ORG = "stellar-org";
+    delete process.env.ALLOWED_MAINTAINER_ORGS;
     delete process.env.GITHUB_MAINTAINER_TEAM;
+    delete process.env.GITHUB_ADMIN_TEAM;
+    delete process.env.GITHUB_OPERATOR_TEAM;
 
-    vi.mocked(fetch).mockResolvedValueOnce(
+    vi.mocked(fetch).mockResolvedValue(
       jsonResponse([{ login: "stellar-org" }])
     );
 
     const token = await callJwt();
 
     expect(token.isMaintainer).toBe(true);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(token.role).toBe("viewer");
+    expect(token.availableOrgs).toEqual(["stellar-org"]);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(recordAuditLog).not.toHaveBeenCalled();
   });
 

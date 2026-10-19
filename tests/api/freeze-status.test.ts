@@ -40,13 +40,11 @@ vi.mock("@/lib/feature-flags", () => ({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeRequest(ip?: string): NextRequest {
-  if (ip) {
-    return new NextRequest("http://localhost/api/freeze-status", {
-      headers: { "x-forwarded-for": ip },
-    });
-  }
-  return new NextRequest("http://localhost/api/freeze-status");
+function makeRequest(ip?: string, origin?: string): NextRequest {
+  const headers = new Headers();
+  if (ip) headers.set("x-forwarded-for", ip);
+  if (origin) headers.set("origin", origin);
+  return new NextRequest("http://localhost/api/freeze-status", { headers });
 }
 
 async function callGet(req: NextRequest) {
@@ -77,6 +75,24 @@ describe("GET /api/freeze-status — rate limiting (#519)", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ active: false });
+  });
+
+  it("allows only the configured origin to read freeze status cross-origin", async () => {
+    const allowed = await callGet(
+      makeRequest("1.2.3.6", "https://github.com")
+    );
+    const denied = await callGet(
+      makeRequest("1.2.3.7", "https://untrusted.example")
+    );
+
+    expect(allowed.status).toBe(200);
+    expect(allowed.headers.get("access-control-allow-origin")).toBe(
+      "https://github.com"
+    );
+    expect(allowed.headers.get("vary")).toContain("Origin");
+    expect(denied.status).toBe(200);
+    expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+    expect(denied.headers.get("vary")).toContain("Origin");
   });
 
   it("returns 200 with active:true when freeze is active", async () => {
@@ -149,6 +165,21 @@ describe("GET /api/freeze-status — rate limiting (#519)", () => {
     const res = await callGet(makeRequest(ip));
     expect(res.status).toBe(429);
     expect(res.headers.get("Cache-Control")).toBeNull();
+  });
+
+  it("preserves the allowlisted CORS origin on 429 responses", async () => {
+    const ip = "10.0.0.4";
+    for (let i = 0; i < 60; i++) {
+      await callGet(makeRequest(ip, "https://github.com"));
+    }
+
+    const res = await callGet(makeRequest(ip, "https://github.com"));
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("access-control-allow-origin")).toBe(
+      "https://github.com"
+    );
+    expect(res.headers.get("vary")).toContain("Origin");
   });
 
   // ── Per-IP isolation ──────────────────────────────────────────────────────

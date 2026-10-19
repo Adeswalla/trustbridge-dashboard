@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { buildStatsCacheHeaders, parseStatsCacheTtl } from "@/lib/cache";
 import { getDashboardStats } from "@/lib/registrations";
-import { publicOptionsResponse, withPublicCors } from "@/lib/public-cors";
+import {
+  allowlistedPublicOptionsResponse,
+  withAllowlistedPublicCors,
+} from "@/lib/public-cors";
 import {
   checkRateLimit,
   extractClientIp,
@@ -58,20 +61,29 @@ export async function GET(request: NextRequest) {
   const rateLimitHeaders = buildRateLimitHeaders(rateLimit, STATS_MAX_REQUESTS);
 
   if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: "Rate limit exceeded" },
-      { status: 429, headers: rateLimitHeaders }
+    return withAllowlistedPublicCors(
+      NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429, headers: rateLimitHeaders }
+      ),
+      request.headers.get("origin")
     );
   }
 
   const stats = await getDashboardStats();
   const ttlMs = parseStatsCacheTtl();
 
-  return withPublicCors(NextResponse.json(stats, {
-    headers: buildStatsCacheHeaders(ttlMs),
-  }));
+  return withAllowlistedPublicCors(
+    NextResponse.json(stats, {
+      headers: buildStatsCacheHeaders(ttlMs),
+    }),
+    request.headers.get("origin")
+  );
 }
 
-export function OPTIONS() {
-  return publicOptionsResponse("GET, OPTIONS");
+export function OPTIONS(request: Request) {
+  return allowlistedPublicOptionsResponse(
+    "GET, OPTIONS",
+    request.headers.get("origin")
+  );
 }

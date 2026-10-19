@@ -11,6 +11,7 @@ import {
   coerceInputValue,
   graphql,
   parse,
+  specifiedRules,
   validate,
   valueFromAST,
   NoSchemaIntrospectionCustomRule,
@@ -337,8 +338,8 @@ export async function POST(request: NextRequest) {
 
   const validationRules =
     process.env.NODE_ENV === "production"
-      ? [NoSchemaIntrospectionCustomRule]
-      : undefined;
+      ? [...specifiedRules, NoSchemaIntrospectionCustomRule]
+      : specifiedRules;
   const validationErrors = validate(schema, document, validationRules);
   if (validationErrors.length > 0) {
     return NextResponse.json(

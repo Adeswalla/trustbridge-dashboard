@@ -2,6 +2,7 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
 import { recordAuditLog } from "@/lib/audit";
+import { AUTH_SIGN_IN_PATH } from "@/lib/auth-pages";
 import {
   getMaintenanceMessage,
   shouldBlockForMaintenance,
@@ -103,6 +104,9 @@ export default withAuth(
     return response;
   },
   {
+    pages: {
+      signIn: AUTH_SIGN_IN_PATH,
+    },
     callbacks: {
       authorized: ({ token, req }) => {
         const path = req.nextUrl.pathname;

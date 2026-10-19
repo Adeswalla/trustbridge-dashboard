@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { isFreezeWindowActive } from "@/lib/freeze-window";
 import {
+  allowlistedPublicOptionsResponse,
+  withAllowlistedPublicCors,
+} from "@/lib/public-cors";
+import {
   checkRateLimit,
   extractClientIp,
   buildRateLimitHeaders,
@@ -66,36 +70,49 @@ export async function GET(request: NextRequest) {
   );
 
   if (!rateLimitResult.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests", code: "RATE_LIMIT_EXCEEDED" },
-      {
-        status: 429,
-        headers: rateLimitHeaders,
-        // Intentionally no Cache-Control on 429 — CDNs must not cache error responses.
-      },
+    return withAllowlistedPublicCors(
+      NextResponse.json(
+        { error: "Too many requests", code: "RATE_LIMIT_EXCEEDED" },
+        {
+          status: 429,
+          headers: rateLimitHeaders,
+          // Intentionally no Cache-Control on 429 — CDNs must not cache error responses.
+        }
+      ),
+      request.headers.get("origin")
     );
   }
 
   // ── Freeze status ─────────────────────────────────────────────────────────
   const status = isFreezeWindowActive();
 
-  return NextResponse.json(
-    {
-      active: status.active,
-      reason: status.reason ?? null,
-      start: status.start?.toISOString() ?? null,
-      end: status.end?.toISOString() ?? null,
-    },
-    {
-      status: 200,
-      headers: {
-        // Short TTL — freeze state can flip at any point; 15 s lets the UI
-        // react quickly while avoiding a thundering herd on every keystroke.
-        "Cache-Control": "public, max-age=15, stale-while-revalidate=30",
-        // Include rate-limit headers on 200 so proactive clients can back off
-        // before hitting the 429 boundary.
-        ...rateLimitHeaders,
+  return withAllowlistedPublicCors(
+    NextResponse.json(
+      {
+        active: status.active,
+        reason: status.reason ?? null,
+        start: status.start?.toISOString() ?? null,
+        end: status.end?.toISOString() ?? null,
       },
-    },
+      {
+        status: 200,
+        headers: {
+          // Short TTL — freeze state can flip at any point; 15 s lets the UI
+          // react quickly while avoiding a thundering herd on every keystroke.
+          "Cache-Control": "public, max-age=15, stale-while-revalidate=30",
+          // Include rate-limit headers on 200 so proactive clients can back off
+          // before hitting the 429 boundary.
+          ...rateLimitHeaders,
+        },
+      }
+    ),
+    request.headers.get("origin")
+  );
+}
+
+export function OPTIONS(request: Request) {
+  return allowlistedPublicOptionsResponse(
+    "GET, OPTIONS",
+    request.headers.get("origin")
   );
 }

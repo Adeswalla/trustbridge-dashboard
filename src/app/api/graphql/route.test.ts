@@ -136,13 +136,42 @@ describe("POST /api/graphql", () => {
     expect((await costlyResponse.json()).errors[0].message).toMatch(/cost/i);
   });
 
-  it("disables schema introspection in production", async () => {
+  it.each([
+    ["the schema root", "{ __schema { queryType { name } } }"],
+    ["a named type", '{ __type(name: "Query") { name } }'],
+    [
+      "a fragment",
+      "query { ...SchemaDetails } fragment SchemaDetails on Query { __schema { queryType { name } } }",
+    ],
+  ])("rejects introspection through %s in production", async (_name, query) => {
     process.env.NODE_ENV = "production";
 
-    const response = await POST(post("{ __schema { queryType { name } } }"));
+    const response = await POST(post(query));
 
     expect(response.status).toBe(400);
     expect((await response.json()).errors[0].message).toMatch(/introspection/i);
+    expect(requireMaintainerSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps schema introspection available outside production", async () => {
+    process.env.NODE_ENV = "development";
+
+    const response = await POST(post("{ __schema { queryType { name } } }"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: { __schema: { queryType: { name: "Query" } } },
+    });
+  });
+
+  it("keeps standard GraphQL validation enabled in production", async () => {
+    process.env.NODE_ENV = "production";
+
+    const response = await POST(post("{ stats { unknownField } }"));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors[0].message).toMatch(/unknownField/);
+    expect(requireMaintainerSession).not.toHaveBeenCalled();
   });
 
   // #499 — `valueFromAST` returns a raw variable value without coercing it to

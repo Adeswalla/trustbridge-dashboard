@@ -9,6 +9,7 @@ import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { recordTokenAudit } from "@/lib/token-audit";
 import { recordAuditLog } from "@/lib/audit";
 import { generateCsrfToken } from "@/lib/csrf";
+import { AUTH_SIGN_IN_PATH } from "@/lib/auth-pages";
 import type { AppRole } from "@/types";
 
 async function isOrgMember(accessToken: string, org: string): Promise<boolean> {
@@ -278,7 +279,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: "/",
+    signIn: AUTH_SIGN_IN_PATH,
   },
   secret: process.env.NEXTAUTH_SECRET,
 };

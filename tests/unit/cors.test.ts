@@ -79,15 +79,14 @@ describe("CORS Policy", () => {
     expect(varyHeader!.value).toContain("Origin");
   });
 
-  it("does NOT apply CORS to authenticated endpoints", async () => {
+  it("leaves route-level CORS endpoints out of static Next.js headers", async () => {
     const headers = await nextConfig.headers();
-    const authenticatedPaths = [
-      "/api/register",
-      "/api/contributors",
+    const routeLevelCorsPaths = [
       "/api/stats",
+      "/api/freeze-status",
     ];
 
-    for (const path of authenticatedPaths) {
+    for (const path of routeLevelCorsPaths) {
       const rule = headers.find((h) => h.source === path);
       expect(rule).toBeUndefined();
     }

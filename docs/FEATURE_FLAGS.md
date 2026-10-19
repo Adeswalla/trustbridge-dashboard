@@ -72,6 +72,11 @@ freeze windows (`FEATURE_FLAG_*`, `FEATURE_FLAGS_DB_ENABLED`,
 | `otel_traces` | `false` | — | Opt-in tracing; composes with `OTEL_TRACES_ENABLED` (see [ENVIRONMENT.md](./ENVIRONMENT.md#opentelemetry-tracing-issue-203)) | `src/lib/tracing.ts` |
 | `freeze_window` | `true` | ✅ | Enforces wave freeze-window blocking on mutating APIs. When OFF, freeze-window helpers never block requests regardless of `FREEZE_WINDOW_*` env vars. | `src/lib/freeze-window.ts` |
 
+The table above is checked against `FEATURE_FLAGS` in
+[`src/lib/feature-flags.ts`](../src/lib/feature-flags.ts) in CI. Run
+`npm run docs:check-feature-flags` locally after adding, renaming, or removing
+a flag; the check fails for either undocumented source keys or stale table rows.
+
 ### Two existing risky features are now gated (issue #201)
 
 - **Batch recheck** (`batch_recheck`). Previously any maintainer `POST` to

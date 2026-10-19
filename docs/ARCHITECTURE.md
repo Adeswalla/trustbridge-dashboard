@@ -83,6 +83,13 @@ flowchart TB
 |-------|-------------|
 | `/register` | Authenticated GitHub user |
 | `/dashboard` | Authenticated + member of `GITHUB_MAINTAINER_ORG` (+ `GITHUB_MAINTAINER_TEAM`, if configured) |
+| `/dashboard/settings` | Maintainer with `operator` or `admin` role |
+
+Unauthenticated requests to `/register` or `/dashboard` are redirected to the
+shared sign-in page at `/` (the same page configured by NextAuth). Authenticated
+non-maintainers are redirected from `/dashboard` to
+`/register?error=maintainer`; maintainers without operator access to settings
+are redirected to `/dashboard?error=insufficient_role`.
 
 Maintainer check flow (two-tier: org, then optionally team):
 
@@ -93,8 +100,6 @@ Maintainer check flow (two-tier: org, then optionally team):
 **Fail closed on API errors.** Both checks treat a non-`ok` response (including `403`/`429` rate limiting) or a network failure as "not a member" rather than throwing — a GitHub outage degrades to non-maintainer access, never a crashed sign-in.
 
 **Audit trail.** A user who passes the org check but fails the team check is recorded via `recordAuditLog` (`src/lib/audit.ts`) with action `maintainer_access_denied_team` and `{ team }` metadata, so maintainers can review near-misses through `/api/audit`. Successful checks are not logged individually to avoid noise.
-
-Non-maintainers hitting `/dashboard` are redirected to `/register?error=maintainer`.
 
 ### Multi-org support and the org-switcher
 
@@ -138,7 +143,9 @@ The endpoint exposes two query fields:
 The schema is intentionally allow-listed and read-only. It exposes no user
 tokens, wallet-proof data, or Horizon debug payloads, and it defines no
 mutation or subscription operation. Production requests cannot use schema
-introspection.
+introspection: GraphQL's `__schema` and `__type` fields are rejected by
+validation before session lookup or resolver execution. Introspection remains
+available in non-production environments for local development.
 
 Requests are JSON POST bodies with a `query` string and optional `variables`.
 The endpoint rejects bodies over 16 KiB, queries deeper than 5 fields, queries
@@ -490,11 +497,11 @@ To support historical event timeline syncing without missing past ledger events:
 
 ## CORS Policy
 
-The trustbridge-action runs **server-side** (Node.js fetch in GitHub Actions), so CORS does not apply to its calls. However, the public endpoints `/api/actions/lookup` and `/api/check` may be called from browser-based tools (Swagger UI, custom scripts), so we lock them down defensively.
+The trustbridge-action runs **server-side** (Node.js fetch in GitHub Actions), so CORS does not apply to its calls. Browser-facing public endpoints use path-specific CORS policies.
 
 ### Configuration
 
-CORS headers are applied via `next.config.mjs` → `headers()`:
+CORS headers for `/api/actions/lookup` and `/api/check` are applied via `next.config.mjs` → `headers()`:
 
 | Header | Value |
 |--------|-------|
@@ -504,17 +511,27 @@ CORS headers are applied via `next.config.mjs` → `headers()`:
 | `Access-Control-Max-Age` | `86400` (24 hours) |
 | `Vary` | `Origin` |
 
+`/api/stats` and `/api/freeze-status` apply the same origin policy in their
+route handlers so CORS headers can be set consistently on successful and
+rate-limited responses. Their preflight handlers allow only `GET, OPTIONS`.
+Requests without an `Origin` continue to work as same-origin/server requests;
+other origins receive no `Access-Control-Allow-Origin` header. `Vary: Origin`
+is set so caches do not reuse an allowed-origin response for another origin.
+
 ### Security constraints
 
 - **Single origin, no multi-value lists.** The CORS specification requires `Access-Control-Allow-Origin` to specify either a single origin or `*`. Browsers reject comma-separated origin lists. Next.js statically sets `ALLOWED_ORIGIN`. Dynamic origin checking across multiple domains can be handled dynamically in middleware or route handlers if needed.
 - **No wildcard (`*`) with credentials.** The allowed origin is explicitly specified.
-- **Default deny.** Only the two paths above receive CORS headers. Authenticated endpoints (`/api/register`, `/api/contributors`, `/api/stats`) are same-origin only.
+- **Default deny for stats and freeze status.** Only the configured origin receives CORS access to `/api/stats` and `/api/freeze-status`. Authenticated endpoints (`/api/register`, `/api/contributors`) are same-origin only; other public endpoints retain their route-specific CORS policy.
 - **No credentials header.** `Access-Control-Allow-Credentials` is intentionally omitted — these endpoints don't use cookies.
-- **To configure the allowed origin**, update `ALLOWED_ORIGIN` in `next.config.mjs`.
+- **To configure the allowed origin**, update `ALLOWED_ORIGIN` in
+  `next.config.mjs` and the matching route-level allowlist in
+  `src/lib/public-cors.ts`. `tests/api/public-cors.test.ts` verifies that both
+  policies stay aligned.
 
 ### Tests
 
-CORS configuration is tested in `tests/unit/cors.test.ts`:
+CORS configuration is tested in `tests/unit/cors.test.ts`, `tests/api/public-cors.test.ts`, `tests/api/stats.test.ts`, and `tests/api/freeze-status.test.ts`:
 - Verifies correct origins are allowed
 - Verifies no wildcard origin
 - Verifies authenticated endpoints are excluded
