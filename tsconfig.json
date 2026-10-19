@@ -1,4 +1,8 @@
 {
+  // NOTE: Map/Set iteration (for...of) requires "dom.iterable" in lib or
+  // "downlevelIteration": true when targeting ES5.  To avoid that dependency,
+  // all Map iterations in src/lib/* use Array.from(map.entries()) /
+  // Array.from(map.values()) instead of direct for...of on the Map.
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
