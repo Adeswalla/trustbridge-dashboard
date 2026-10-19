@@ -106,7 +106,7 @@ export function getRateLimitMetrics(): RateLimitMetrics {
   const opts = getDefaultOptions();
   let activeCount = 0;
 
-  for (const [, entry] of store) {
+  for (const entry of Array.from(store.values())) {
     const hasRecent = entry.timestamps.some((t) => now - t < opts.windowMs);
     if (hasRecent) {
       activeCount++;
