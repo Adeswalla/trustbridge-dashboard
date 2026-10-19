@@ -14,6 +14,7 @@ npx playwright show-report              # last run
 | Spec | Journey |
 | --- | --- |
 | `tests/e2e/register.spec.ts` | Contributor registration: sign in, paste an address, read the readiness result, save, copy the Freighter proof. |
+| `tests/e2e/register-happy-path.spec.ts` | Register happy path with mocked Horizon (#556): drives the full UI flow for all three Horizon account archetypes (FUNDED→ready, LOW_BALANCE→low_reserve, NO_TRUSTLINE→not_ready) using `HORIZON_TEST_ACCOUNTS` from `tests/mocks/horizon-fixtures.ts` as canonical addresses. Covers address-check request payload, readiness badge, save→confirmation→card update, and address-switching scenarios. |
 | `tests/e2e/maintainer.spec.ts` | Maintainer dashboard: access control, contributor table, re-check, metrics, settings. |
 | `tests/e2e/status.spec.ts` | Public health page (`/status`, issue #384): loads without auth, renders the heading, timestamp, overall banner and component checks, and refreshes via the "Check now" control against a mocked `/api/health`. |
 | `tests/e2e/settings-feature-flags.spec.ts` | Feature-flag panel on `/dashboard/settings` (issue #510): renders mocked flags with their keys, sources and enabled/disabled states, plus the loading, empty, error (HTTP 500) and re-request states. `GET /api/settings/feature-flags` resolves the deployment's real `FEATURE_*` environment, so every case intercepts it — see below. |

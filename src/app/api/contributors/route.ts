@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { refreshMaintainerSession, requireMaintainerSession } from "@/lib/api-auth";
 import { recordAuditLog } from "@/lib/audit";
 import { assertSameOrigin } from "@/lib/csrf";
-import { isFeatureEnabled } from "@/lib/feature-flags";
 import { enforceFreezeWindowGuard } from "@/lib/freeze-window";
 import { getRegistryMode } from "@/lib/registry-mode";
 import { getContributors } from "@/lib/registrations";
@@ -16,6 +15,10 @@ import {
   buildRecheckLockKey,
   parseRecheckIdempotencyTtl,
 } from "@/lib/cache";
+import {
+  buildContributorListCacheControl,
+  invalidateContributorListCaches,
+} from "@/lib/cache-tags";
 import type { ReadinessStatus } from "@/types";
 
 export const runtime = "nodejs";
@@ -65,6 +68,12 @@ export async function GET(request: NextRequest) {
       registryMode: getRegistryMode(),
       staleness,
       ...(readinessParam !== null ? { readiness: readinessParam } : {}),
+    }, {
+      headers: {
+        // Authenticated maintainer-only route: private cache, 30 s fresh,
+        // 60 s stale-while-revalidate so table re-opens feel instant.
+        "Cache-Control": buildContributorListCacheControl(),
+      },
     });
   } catch (error) {
     captureException(error, {
@@ -134,6 +143,12 @@ export async function POST(request: NextRequest) {
 
     // Lock the recheck key for the duration of the idempotency window
     recheckLockCache.set(lockKey, { jobId, createdAt: Date.now() }, parseRecheckIdempotencyTtl());
+
+    // Eagerly invalidate the contributor list caches so the next GET returns
+    // fresh data.  The background job will invalidate again when it finishes,
+    // but this first call ensures a maintainer who refreshes the table
+    // immediately after hitting "Recheck all" doesn't see a stale list.
+    await invalidateContributorListCaches();
 
     await recordAuditLog({
       action: "recheck.batch.queued",
