@@ -7,32 +7,28 @@ import { authOptions } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
 import { isMaintainer } from "@/lib/maintainers";
 import { prisma } from "@/lib/prisma";
+import { sanitizeMarkdown } from "@/lib/markdown-sanitizer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Strips HTML tags from a string to prevent stored XSS.
- * Prefer escape-on-render (e.g. React's default JSX escaping) as the primary
- * defence; this stripping is a belt-and-suspenders sanitisation at input time.
- */
-function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>?/gm, "").trim();
-}
-
-/**
  * Zod schema for the PATCH /api/contributors/[id]/notes request body.
  *
- * - notes: optional free-text field, max 1 000 chars after HTML-strip
- * - tags:  optional array of short labels, max 10 items, each max 30 chars
+ * - notes: optional free-text / markdown field, max 1 000 chars after sanitisation.
+ *          Sanitisation is markdown-aware: safe inline formatting (bold, italic,
+ *          code, links to https:// URLs) is preserved; raw HTML, javascript: URIs,
+ *          data: URIs, and all event-handler attributes are stripped.
+ * - tags:  optional array of short labels, max 10 items, each max 30 chars.
+ *          Tags are plain-text only — no markdown or HTML.
  *
- * HTML content is stripped before length validation so a payload that is
- * entirely markup cannot sneak past the limit.
+ * Input length is checked after sanitisation so a payload composed entirely of
+ * HTML markup cannot sneak past the character limit.
  */
 const NotesBodySchema = z.object({
   notes: z
     .string()
-    .transform(stripHtml)
+    .transform(sanitizeMarkdown)
     .pipe(
       z
         .string()
@@ -44,7 +40,8 @@ const NotesBodySchema = z.object({
     .array(
       z
         .string()
-        .transform(stripHtml)
+        // Tags are plain-text; strip all markup including markdown syntax.
+        .transform((s) => sanitizeMarkdown(s, { plainTextOnly: true }))
         .pipe(
           z
             .string()

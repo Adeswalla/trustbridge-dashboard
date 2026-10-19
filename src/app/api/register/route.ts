@@ -25,6 +25,12 @@ import {
   trackServerRegistrationUpdated,
 } from "@/lib/analytics";
 import { recordRegistrationConflict } from "@/lib/maintainers";
+import {
+  checkRateLimit,
+  buildRateLimitHeaders,
+  extractClientIp,
+} from "@/lib/rate-limit";
+import { invalidateContributorListCaches } from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +86,24 @@ function isUniqueAddressViolation(error: unknown): boolean {
 export async function POST(request: NextRequest) {
   const csrf = assertSameOrigin(request);
   if (csrf) return csrf;
+
+  // Per-IP rate limit — mirrors the pattern used by POST /api/check.
+  // Contributors registering an address rarely need more than a handful of
+  // saves per minute; the limit protects Horizon and the database from
+  // automated hammering without affecting normal usage.
+  const clientIp = extractClientIp(request);
+  const rateLimit = checkRateLimit(clientIp, {
+    // Register calls are less frequent than check calls; use the global defaults
+    // (10 req/min) but allow the caller to override via env vars.
+  });
+  const rateLimitHeaders = buildRateLimitHeaders(rateLimit, 10);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many registration attempts. Please try again later.", code: REGISTER_ERROR_CODES.serverError },
+      { status: 429, headers: { ...rateLimitHeaders } }
+    );
+  }
 
   const session = await getServerSession(authOptions);
 
@@ -290,6 +314,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Invalidate the contributor list caches so maintainers see the new
+    // registration (or updated readiness) immediately on the next dashboard load.
+    await invalidateContributorListCaches();
+
     return NextResponse.json({
       success: true,
       registration: {
@@ -318,6 +346,8 @@ export async function POST(request: NextRequest) {
         }),
       },
       checklistCompleted: updatedChecklist,
+    }, {
+      headers: { ...rateLimitHeaders },
     });
   } catch (error) {
     // The response stays deliberately vague — the caller learns nothing about

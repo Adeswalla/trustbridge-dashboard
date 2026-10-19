@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { computeReadiness } from "@/lib/readiness";
 import { recordAuditLog } from "@/lib/audit";
 import { evaluateStaleExportGuard } from "@/lib/stale-export";
+import { buildCsv, buildCsvFilename } from "@/lib/csv";
 import type { ContributorRow } from "@/types";
 import {
   parseExportPagination,
@@ -324,13 +325,14 @@ export async function POST(request: NextRequest) {
       c.lastCheckedAt ?? "",
     ]);
 
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
+    const csv = buildCsv(headers, rows);
 
     return new NextResponse(csv, {
       status: 200,
       headers: {
-        "Content-Type": "text/csv",
-        "Content-Disposition": `attachment; filename="treasury-export-${new Date().toISOString().split("T")[0]}.csv"`,
+        "Content-Type": "text/csv;charset=utf-8",
+        "Content-Disposition": `attachment; filename="${buildCsvFilename("treasury-export")}"`,
+        "Cache-Control": "no-store",
       },
     });
   }

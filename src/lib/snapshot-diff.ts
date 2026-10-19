@@ -163,7 +163,7 @@ export function diffSnapshots(
   const addressChanged: DiffEntry[] = [];
   const unchanged: DiffEntry[] = [];
 
-  for (const [key, newRow] of newByUser) {
+  for (const [key, newRow] of Array.from(newByUser.entries())) {
     const oldRow = oldByUser.get(key);
     if (!oldRow) {
       added.push({
@@ -197,7 +197,7 @@ export function diffSnapshots(
     }
   }
 
-  for (const [key, oldRow] of oldByUser) {
+  for (const [key, oldRow] of Array.from(oldByUser.entries())) {
     if (!newByUser.has(key)) {
       removed.push({
         githubUsername: oldRow.githubUsername,

@@ -12,6 +12,7 @@ vi.mock("@/lib/notifications", () => ({
   getNotificationsForUser: vi.fn(),
   markNotificationsAsRead: vi.fn(),
 }));
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
 import { getServerSession } from "next-auth";
 import {

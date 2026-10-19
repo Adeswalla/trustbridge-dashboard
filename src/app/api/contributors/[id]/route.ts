@@ -6,6 +6,7 @@ import { assertSameOrigin } from "@/lib/csrf";
 import { enforceFreezeWindowGuard } from "@/lib/freeze-window";
 import { refreshContributor } from "@/lib/registrations";
 import { captureException } from "@/lib/sentry";
+import { invalidateContributorListCaches } from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     }
 
     const { contributor, diff } = result;
+
+    // Invalidate contributor list and stats caches so the next GET reflects
+    // the fresh readiness state without requiring a full page reload.
+    await invalidateContributorListCaches();
 
     await recordAuditLog({
       action: "recheck.single.queued",

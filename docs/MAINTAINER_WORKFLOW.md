@@ -42,6 +42,11 @@ trustbridge-dash export --format csv --out ./treasury-export.csv
 trustbridge-dash export --format json --out ./treasury-export.json
 ```
 
+API clients can request the same formats by POSTing `{"format":"csv"}` or
+`{"format":"json"}` to `/api/treasury/export`. The endpoint requires an
+operator session or an API key with the `export:read` scope and applies its
+same-origin request check.
+
 #### 3. Recheck
 Trigger an address verification / readiness check:
 ```bash
